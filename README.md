@@ -1,276 +1,262 @@
-# 🐳 Kubernetes Lab — Мониторинг API приложения
+# 🐳 Kubernetes Lab — API Monitoring Playground
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.27+-blue.svg)](https://kubernetes.io/)
-[![Prometheus](https://img.shields.io/badge/Prometheus-2.47+-red.svg)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/Grafana-10.0+-orange.svg)](https://grafana.com/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+<div align="center">
 
-## 📋 О проекте
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-1.27+-326CE5.svg)
+![Prometheus](https://img.shields.io/badge/Prometheus-2.47+-E6522C.svg)
+![Grafana](https://img.shields.io/badge/Grafana-10+-F46800.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)
 
-Лабораторный стенд для изучения **Kubernetes**, **мониторинга** (Prometheus + Grafana) и **API-интеграции**.
+Лабораторный стенд для изучения **Kubernetes**, **Prometheus**, **Grafana** и мониторинга REST API.
 
-Проект разворачивает:
-- ✅ FastAPI приложение с REST API и метриками
-- ✅ Prometheus для сбора метрик
-- ✅ Grafana с готовым дашбордом
-- ✅ Интеграционный клиент, генерирующий тестовый трафик
-
-**Работает на Windows, Linux и macOS!**
+</div>
 
 ---
 
-## 🚀 Быстрый старт
+## ✨ Возможности
+
+- 🚀 FastAPI приложение с REST API
+- 📊 Экспорт метрик Prometheus
+- 📈 Grafana с готовым Dashboard
+- 🔄 Генератор тестового трафика
+- ☸️ Развёртывание в Kubernetes
+- 🖥️ Поддержка Windows / Linux / macOS
+
+---
+
+## 📦 Стек технологий
+
+| Компонент | Версия |
+|-----------|----------|
+| Python | 3.11+ |
+| FastAPI | 0.104+ |
+| Kubernetes | 1.27+ |
+| Docker | 24+ |
+| Prometheus | 2.47+ |
+| Grafana | 10+ |
+
+---
+
+## 🚀 Быстрый запуск
 
 ### Требования
 
-| Компонент | Windows | Linux | macOS |
-|-----------|---------|-------|-------|
-| Docker Desktop | ✅ | ✅ | ✅ |
-| Kubernetes | ✅ (в Docker Desktop) | Minikube/Kind | ✅ (в Docker Desktop) |
-| Helm | ✅ | ✅ | ✅ |
-| Python 3.11+ | ✅ | ✅ | ✅ |
+- Docker Desktop
+- Kubernetes (Docker Desktop / Minikube / Kind)
+- Helm
+- Python 3.11+
 
-### Установка
+### 1. Клонирование
 
-
-# 1. Клонируйте репозиторий
+```bash
 git clone https://github.com/your-repo/k8s-lab.git
 cd k8s-lab
+```
 
-# 2. Установите зависимости Python
+### 2. Установка зависимостей
+
+```bash
 pip install -r requirements.txt
+```
 
-# 3. Запустите стенд
+### 3. Запуск проекта
+
+```bash
 python launcher.py --start
+```
 
-Сервис	URL	Логин/Пароль
-API приложения	http://localhost:30080
-Prometheus	http://localhost:30900
-Grafana	http://localhost:30300	admin / admin123
+---
 
+## 🌐 Доступные сервисы
 
-📁 Структура проекта
-text
+| Сервис | URL | Данные для входа |
+|----------|----------------------------|----------------|
+| API | http://localhost:30080 | - |
+| Prometheus | http://localhost:30900 | - |
+| Grafana | http://localhost:30300 | `admin / admin123` |
+
+---
+
+## 📁 Структура проекта
+
+```text
 k8s-lab/
-├── launcher.py              # 🚀 Универсальный запускатор (Windows/Linux/macOS)
-├── requirements.txt         # 📦 Python зависимости для запускатора
-├── README.md                # 📖 Документация
 │
-├── app/                     # 🐍 FastAPI приложение
-│   ├── main.py              # Код API с метриками
-│   ├── Dockerfile           # Docker образ приложения
-│   └── requirements.txt     # Зависимости FastAPI
+├── launcher.py
+├── requirements.txt
+├── README.md
 │
-├── integration/             # 🔄 Интеграционный клиент
-│   ├── client.py            # Генератор тестового трафика
-│   ├── Dockerfile           # Docker образ клиента
-│   └── requirements.txt     # Зависимости клиента
+├── app/
+│   ├── main.py
+│   ├── Dockerfile
+│   └── requirements.txt
 │
-├── k8s/                     # ☸️ Kubernetes манифесты
-│   ├── app-deployment.yaml  # Деплой приложения
-│   └── app-service.yaml     # Сервис приложения
+├── integration/
+│   ├── client.py
+│   ├── Dockerfile
+│   └── requirements.txt
 │
-└── docker-compose.yml       # 🐳 Запуск интеграционного клиента
+├── k8s/
+│   ├── app-deployment.yaml
+│   └── app-service.yaml
+│
+└── docker-compose.yml
+```
 
-🛠️ Использование
-Команды запускатора
-bash
-# Запуск стенда (по умолчанию)
-python launcher.py --start
-# или просто
+---
+
+## 🛠️ Основные команды
+
+### Запуск
+
+```bash
 python launcher.py
+# или
+python launcher.py --start
+```
 
-# Частичная очистка (оставляет мониторинг)
+### Частичная очистка
+
+```bash
 python launcher.py --clean
+```
 
-# Полная очистка (удаляет всё)
+### Полная очистка
+
+```bash
 python launcher.py --clean-all
-Что делает каждый режим
-Режим	Приложение	ServiceMonitor	Мониторинг (Prom+Graf)	Docker образы
---start	✅ Запускает	✅ Создаёт	✅ Устанавливает	✅ Собирает
---clean	❌ Удаляет	❌ Удаляет	❌ Оставляет	❌ Нет
---clean-all	❌ Удаляет	❌ Удаляет	❌ Удаляет	✅ Очищает
-Ручное управление
-bash
-# Просмотр логов клиента
-docker-compose logs -f
+```
 
-# Остановка клиента
-docker-compose down
+---
 
-# Проверка состояния Kubernetes
-kubectl get pods -A
+## 📊 Метрики
 
-# Перезапуск приложения
-kubectl rollout restart deployment myapp
+Приложение экспортирует:
 
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `python_gc_*`
+- `process_*`
 
-📊 Мониторинг
-Prometheus метрики
-Приложение экспортирует следующие метрики:
+### Полезные PromQL запросы
 
-Метрика	Тип	Описание
-http_requests_total	Counter	Общее количество HTTP запросов
-http_request_duration_seconds	Histogram	Гистограмма времени ответа
-python_gc_*	Counter	Метрики сборщика мусора Python
-process_*	Gauge	Метрики процесса (CPU, память)
-PromQL запросы для дашборда
-promql
-# Всего запросов
+```promql
 sum(http_requests_total)
+```
 
-# RPS (запросов в секунду)
+```promql
 sum(rate(http_requests_total[1m]))
+```
 
-# Время ответа (95-й перцентиль)
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1m]))
+```promql
+histogram_quantile(
+  0.95,
+  rate(http_request_duration_seconds_bucket[1m])
+)
+```
 
-# Запросы по эндпоинтам
-sum(rate(http_requests_total[1m])) by (endpoint)
+---
 
-# Запросы по методам (GET/POST)
-sum(rate(http_requests_total[1m])) by (method)
-Готовый дашборд
-После запуска в Grafana автоматически создаётся дашборд "Мониторинг API приложения" с панелями:
+## 🧪 Проверка API
 
-Всего запросов — общее количество запросов
+### Health Check
 
-RPS — запросы в секунду
-
-Время ответа (p95) — 95-й перцентиль времени ответа
-
-Запросы по эндпоинтам — распределение по эндпоинтам
-
-Запросы по методам — соотношение GET/POST
-
-🧪 Тестирование API
-
-# Проверка здоровья
+```bash
 curl http://localhost:30080/api/v1/health
+```
 
-# POST запрос
+### POST запрос
+
+```bash
 curl -X POST http://localhost:30080/api/v1/data \
-  -H "Content-Type: application/json" \
-  -d '{"test": 1}'
+-H "Content-Type: application/json" \
+-d '{"test":1}'
+```
 
-# GET запрос
-curl http://localhost:30080/api/v1/data/1
+### Метрики
 
-# Просмотр метрик
+```bash
 curl http://localhost:30080/metrics
-Генерация нагрузки
+```
 
-# Генерация 100 запросов
-for i in {1..100}; do
-  curl -X POST http://localhost:30080/api/v1/data \
-    -H "Content-Type: application/json" \
-    -d "{\"test\":$i}"
-  echo "Запрос $i отправлен"
-  sleep 0.1
-done
+---
 
+## 🐛 Troubleshooting
 
-🐛 Устранение неполадок
+<details>
+<summary><b>Docker не запущен</b></summary>
 
-Проблема: Docker не запущен
+```text
+ОШИБКА: Docker не запущен!
+```
 
-Ошибка: ОШИБКА: Docker не запущен!
+Запустите Docker Desktop или:
 
-Решение:
+```bash
+sudo systemctl start docker
+```
 
-# Windows: Запустите Docker Desktop
-# Linux: sudo systemctl start docker
-# macOS: Запустите Docker Desktop
+</details>
 
-Проблема: Kubernetes не доступен
+<details>
+<summary><b>Kubernetes недоступен</b></summary>
 
-Ошибка: ОШИБКА: Kubernetes недоступен!
+```bash
+minikube start
+```
 
-Решение:
+или включите Kubernetes в Docker Desktop.
 
+</details>
 
-# Windows: Включите Kubernetes в Docker Desktop (Settings → Kubernetes)
-# Linux: minikube start
-# macOS: Включите Kubernetes в Docker Desktop
+<details>
+<summary><b>Grafana не отображает данные</b></summary>
 
-Проблема: Порт уже занят
+Проверьте:
 
-Ошибка: bind: address already in use
+```bash
+kubectl get servicemonitor -n monitoring
+```
 
-Решение:
+и наличие Targets в Prometheus.
 
-# Найти процесс, использующий порт
-# Windows: netstat -ano | findstr :30080
-# Linux: sudo lsof -i :30080
-# Остановить процесс или изменить порт в настройках
+</details>
 
-Проблема: Grafana не показывает данные
+---
 
-Решение:
+## 🧹 Очистка
 
-Проверьте, что Prometheus видит Targets: http://localhost:30900/targets
-
-Убедитесь, что ServiceMonitor создан: kubectl get servicemonitor -n monitoring
-
-Сгенерируйте трафик: python -c "import requests; [requests.post('http://localhost:30080/api/v1/data', json={'test': i}) for i in range(50)]"
-
-Подождите 1-2 минуты для сбора метрик
-
-📋 Чек-лист запуска
-
-Docker Desktop запущен
-
-Kubernetes включён
-
-Helm установлен
-
-Python 3.11+ установлен
-
-Выполнена команда pip install -r requirements.txt
-
-Запущен python launcher.py --start
-
-🧹 Очистка
-
-Полная очистка (удаляет всё)
+```bash
 python launcher.py --clean-all
+```
 
-Частичная очистка (оставляет мониторинг)
-python launcher.py --clean
+или вручную:
 
-Ручная очистка
-
-# Остановка клиента
+```bash
 docker-compose down
-
-# Удаление приложения
 kubectl delete -f ./k8s/
-
-# Удаление мониторинга
 helm uninstall monitoring -n monitoring
 kubectl delete namespace monitoring
-
-# Удаление Docker образов
-docker rmi myapp:latest
 docker system prune -f
+```
 
-📦 Технологии
-Компонент	Технология	Версия
-API	FastAPI	0.104.1
-Метрики	Prometheus Client	0.19.0
-Мониторинг	Prometheus + Grafana	kube-prometheus-stack
-Оркестрация	Kubernetes	1.27+
-Контейнеризация	Docker	24.0+
-Язык	Python	3.11+
+---
 
-🤝 Вклад в проект
-Форкните репозиторий
+## 🤝 Contributing
 
-Создайте ветку для фичи (git checkout -b feature/amazing)
+```bash
+git checkout -b feature/amazing-feature
+git commit -m "Add amazing feature"
+git push origin feature/amazing-feature
+```
 
-Зафиксируйте изменения (git commit -m 'Add amazing feature')
+Создайте Pull Request 🚀
 
-Отправьте в репозиторий (git push origin feature/amazing)
+---
 
-Откройте Pull Request
+<div align="center">
+
+**⭐ Если проект оказался полезным — поставьте звезду репозиторию.**
+
+</div>
