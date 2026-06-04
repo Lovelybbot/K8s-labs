@@ -469,12 +469,11 @@ def clean_all():
     run_command("docker-compose down")
     print_color("ГОТОВО: Клиент остановлен", Colors.GREEN)
     
-    # 2. Удаление ServiceMonitor
-    print_color("\n[2/5] Удаление ServiceMonitor...", Colors.YELLOW)
-    run_command("kubectl delete servicemonitor myapp-monitor -n monitoring --ignore-not-found")
-    run_command("kubectl delete servicemonitor myapp-monitor -n default --ignore-not-found")
+
+    # 2. Удаление PodMonitor
+    print_color("\n[2/5] Удаление PodMonitor...", Colors.YELLOW)
     run_command("kubectl delete podmonitor myapp-podmonitor -n monitoring --ignore-not-found")
-    print_color("ГОТОВО: ServiceMonitor удалён", Colors.GREEN)
+    print_color("ГОТОВО: PodMonitor удалён", Colors.GREEN)
     
     # 3. Удаление ресурсов приложения
     print_color("\n[3/5] Удаление ресурсов приложения...", Colors.YELLOW)
