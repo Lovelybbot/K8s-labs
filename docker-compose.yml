@@ -1,0 +1,10 @@
+services:
+  integration-client:
+    build: ./integration
+    container_name: api-integration-client
+    environment:
+      - APP_URL=http://host.docker.internal:30080
+      - PROMETHEUS_URL=http://host.docker.internal:30900
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
