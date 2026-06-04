@@ -1,20 +1,18 @@
-
-
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
-  name: pod-monitor
+  name: myapp-podmonitor
   namespace: monitoring
   labels:
-    release: monitoring          # ← ЭТО САМОЕ ВАЖНОЕ!
+    release: monitoring
 spec:
   selector:
     matchLabels:
       app: myapp
+  namespaceSelector:
+    matchNames:
+    - default
   podMetricsEndpoints:
   - port: http
     path: /metrics
     interval: 15s
-  namespaceSelector:
-    matchNames:
-    - default

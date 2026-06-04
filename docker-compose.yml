@@ -3,14 +3,12 @@ services:
     build: ./integration
     container_name: api-integration-client
     environment:
-      # Will be replaced by launcher.py based on platform
-      - APP_URL=http://localhost:30080
-      - PROMETHEUS_URL=http://localhost:30900
-      - GRAFANA_URL=http://localhost:30300
+      - APP_URL=http://host.docker.internal:30080
+      - PROMETHEUS_URL=http://host.docker.internal:30900
+      - GRAFANA_URL=http://host.docker.internal:30300
       - GRAFANA_PASSWORD=admin123
     restart: unless-stopped
     stdin_open: true
     tty: true
     extra_hosts:
-      # For Linux: allows container to access host
       - "host.docker.internal:host-gateway"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Universal launcher for Kubernetes Lab
-Works on Windows, Linux, and macOS
+Универсальный запускатор Kubernetes Lab
+Работает на Windows, Linux и macOS
 """
 
 import os
@@ -9,32 +9,25 @@ import sys
 import platform
 import subprocess
 import time
-import socket
+import json
+import tempfile
+import argparse
 
 class Colors:
-    """Colors for terminal output"""
+    """Цвета для вывода в терминале"""
     CYAN = '\033[96m'
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
     RED = '\033[91m'
+    WHITE = '\033[97m'
     RESET = '\033[0m'
-    
-    @staticmethod
-    def disable():
-        """Disable colors on Windows if needed"""
-        if platform.system() == "Windows":
-            Colors.CYAN = ''
-            Colors.GREEN = ''
-            Colors.YELLOW = ''
-            Colors.RED = ''
-            Colors.RESET = ''
 
 def print_color(text, color=Colors.CYAN):
-    """Print colored text"""
+    """Вывод цветного текста"""
     print(f"{color}{text}{Colors.RESET}")
 
 def run_command(cmd, shell=False):
-    """Run command and return result"""
+    """Выполнение команды и возврат результата"""
     try:
         if platform.system() == "Windows":
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -44,89 +37,108 @@ def run_command(cmd, shell=False):
     except Exception as e:
         return False, "", str(e)
 
+def check_dependencies():
+    """Проверка и установка необходимых Python пакетов"""
+    print_color("\n[0/9] Проверка зависимостей...", Colors.YELLOW)
+    
+    try:
+        import requests
+        print_color("ГОТОВО: Все зависимости установлены", Colors.GREEN)
+        return True
+    except ImportError:
+        print_color("Установка необходимых пакетов (requests)...", Colors.YELLOW)
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "requests"], 
+                          capture_output=True, check=True)
+            print_color("ГОТОВО: Пакеты установлены", Colors.GREEN)
+            return True
+        except Exception as e:
+            print_color(f"ОШИБКА: Не удалось установить пакеты: {e}", Colors.RED)
+            print_color("Пожалуйста, выполните: pip install requests", Colors.YELLOW)
+            return False
+
 def check_docker():
-    """Check if Docker is running"""
-    print_color("\n[1/7] Checking Docker...", Colors.YELLOW)
+    """Проверка работы Docker"""
+    print_color("\n[1/9] Проверка Docker...", Colors.YELLOW)
     success, stdout, stderr = run_command("docker info")
     if success:
-        print_color("OK: Docker is running", Colors.GREEN)
+        print_color("ГОТОВО: Docker работает", Colors.GREEN)
         return True
     else:
-        print_color("ERROR: Docker is not running!", Colors.RED)
+        print_color("ОШИБКА: Docker не запущен!", Colors.RED)
+        if platform.system() == "Windows":
+            print_color("Пожалуйста, запустите Docker Desktop", Colors.YELLOW)
+        else:
+            print_color("Пожалуйста, запустите Docker: sudo systemctl start docker", Colors.YELLOW)
         return False
 
 def check_kubernetes():
-    """Check if Kubernetes is available"""
-    print_color("\n[2/7] Checking Kubernetes...", Colors.YELLOW)
+    """Проверка доступности Kubernetes"""
+    print_color("\n[2/9] Проверка Kubernetes...", Colors.YELLOW)
     success, stdout, stderr = run_command("kubectl cluster-info")
     if success:
-        print_color("OK: Kubernetes is working", Colors.GREEN)
+        print_color("ГОТОВО: Kubernetes работает", Colors.GREEN)
         return True
     else:
-        print_color("ERROR: Kubernetes is not available!", Colors.RED)
+        print_color("ОШИБКА: Kubernetes недоступен!", Colors.RED)
         if platform.system() == "Windows":
-            print_color("Make sure Kubernetes is enabled in Docker Desktop", Colors.YELLOW)
+            print_color("Убедитесь, что Kubernetes включен в Docker Desktop", Colors.YELLOW)
         else:
-            print_color("Run: minikube start or kind create cluster", Colors.YELLOW)
+            print_color("Запустите: minikube start или kind create cluster", Colors.YELLOW)
         return False
 
 def get_docker_host():
-    """Get Docker host address for different platforms"""
+    """Получение адреса хоста Docker для разных платформ"""
     system = platform.system()
     if system == "Windows":
         return "host.docker.internal"
     elif system == "Linux":
-        # Check if running inside container
         if os.path.exists('/.dockerenv'):
             return "host.docker.internal"
         return "localhost"
-    elif system == "Darwin":  # macOS
+    elif system == "Darwin":
         return "host.docker.internal"
     else:
         return "localhost"
 
 def build_app():
-    """Build Docker image for app"""
-    print_color("\n[3/7] Building myapp image...", Colors.YELLOW)
+    """Сборка Docker образа приложения"""
+    print_color("\n[3/9] Сборка образа myapp...", Colors.YELLOW)
     success, stdout, stderr = run_command("docker build -t myapp:latest ./app")
     if success:
-        print_color("OK: Image built", Colors.GREEN)
+        print_color("ГОТОВО: Образ собран", Colors.GREEN)
         return True
     else:
-        print_color(f"ERROR: Failed to build image: {stderr}", Colors.RED)
+        print_color(f"ОШИБКА: Не удалось собрать образ: {stderr}", Colors.RED)
         return False
 
 def deploy_app():
-    """Deploy app to Kubernetes"""
-    print_color("\n[4/7] Deploying app to Kubernetes...", Colors.YELLOW)
+    """Деплой приложения в Kubernetes"""
+    print_color("\n[4/9] Деплой приложения в Kubernetes...", Colors.YELLOW)
     
-    # Apply deployments
     run_command("kubectl apply -f ./k8s/app-deployment.yaml")
     run_command("kubectl apply -f ./k8s/app-service.yaml")
     
-    # Wait for pods
-    print_color("Waiting for myapp pods...", Colors.YELLOW)
-    time.sleep(5)
+    print_color("Ожидание запуска подов myapp...", Colors.YELLOW)
+    time.sleep(10)
     
     success, stdout, stderr = run_command("kubectl wait --for=condition=ready pod -l app=myapp --timeout=60s")
     if success:
-        print_color("OK: App is running", Colors.GREEN)
+        print_color("ГОТОВО: Приложение запущено", Colors.GREEN)
         return True
     else:
-        print_color("Warning: Pods may not be ready yet", Colors.YELLOW)
+        print_color("Предупреждение: Поды могут быть ещё не готовы", Colors.YELLOW)
         return True
 
 def install_monitoring():
-    """Install Prometheus and Grafana"""
-    print_color("\n[5/7] Installing Prometheus + Grafana...", Colors.YELLOW)
+    """Установка Prometheus и Grafana"""
+    print_color("\n[5/9] Установка Prometheus + Grafana...", Colors.YELLOW)
     
-    # Check if already installed
     success, stdout, stderr = run_command("helm list -n monitoring")
     if "monitoring" in stdout:
-        print_color("OK: Monitoring already installed", Colors.GREEN)
+        print_color("ГОТОВО: Мониторинг уже установлен", Colors.GREEN)
         return True
     
-    # Add repo and install
     run_command("helm repo add prometheus-community https://prometheus-community.github.io/helm-charts")
     run_command("helm repo update")
     
@@ -140,26 +152,24 @@ def install_monitoring():
     
     success, stdout, stderr = run_command(cmd)
     if success:
-        print_color("Waiting for monitoring to start (120 seconds)...", Colors.YELLOW)
+        print_color("Ожидание запуска мониторинга (120 секунд)...", Colors.YELLOW)
         time.sleep(120)
-        print_color("OK: Monitoring installed", Colors.GREEN)
+        print_color("ГОТОВО: Мониторинг установлен", Colors.GREEN)
         return True
     else:
-        print_color(f"Warning: {stderr}", Colors.YELLOW)
+        print_color(f"Предупреждение: {stderr}", Colors.YELLOW)
         return True
 
-def create_servicemonitor():
-    """Create ServiceMonitor for myapp"""
-    print_color("\n[6/7] Creating ServiceMonitor...", Colors.YELLOW)
+def create_podmonitor():
+    """Создание PodMonitor для myapp"""
+    print_color("\n[6/9] Создание PodMonitor...", Colors.YELLOW)
     
-    # Delete old if exists
-    run_command("kubectl delete servicemonitor myapp-monitor -n monitoring --ignore-not-found")
+    run_command("kubectl delete podmonitor myapp-podmonitor -n monitoring --ignore-not-found")
     
-    sm_yaml = """
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+    pm_yaml = """apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
 metadata:
-  name: myapp-monitor
+  name: myapp-podmonitor
   namespace: monitoring
   labels:
     release: monitoring
@@ -167,99 +177,425 @@ spec:
   selector:
     matchLabels:
       app: myapp
-  endpoints:
-  - port: http
-    path: /metrics
-    interval: 15s
   namespaceSelector:
     matchNames:
     - default
+  podMetricsEndpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
 """
     
-    # Save to temp file
-    with open("/tmp/servicemonitor.yaml", "w") as f:
-        f.write(sm_yaml)
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    temp_file = os.path.join(temp_dir, "podmonitor_temp.yaml")
     
-    success, stdout, stderr = run_command("kubectl apply -f /tmp/servicemonitor.yaml")
-    if success:
-        print_color("OK: ServiceMonitor created", Colors.GREEN)
-        return True
-    else:
-        print_color(f"Warning: {stderr}", Colors.YELLOW)
-        return True
+    with open(temp_file, "w") as f:
+        f.write(pm_yaml)
+    
+    try:
+        success, stdout, stderr = run_command(f'kubectl apply -f "{temp_file}"')
+        if success:
+            print_color("ГОТОВО: PodMonitor создан", Colors.GREEN)
+            return True
+        else:
+            print_color(f"Предупреждение: {stderr}", Colors.YELLOW)
+            return True
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
 def start_client():
-    """Start integration client"""
-    print_color("\n[7/7] Starting integration client...", Colors.YELLOW)
-    
-    # Update docker-compose with correct host
-    docker_host = get_docker_host()
-    
-    # Read existing docker-compose
-    with open("docker-compose.yml", "r") as f:
-        compose_content = f.read()
-    
-    # Update environment variables
-    compose_content = compose_content.replace(
-        "APP_URL=http://localhost:30080",
-        f"APP_URL=http://{docker_host}:30080"
-    )
-    compose_content = compose_content.replace(
-        "PROMETHEUS_URL=http://localhost:30900",
-        f"PROMETHEUS_URL=http://{docker_host}:30900"
-    )
-    
-    with open("docker-compose.yml.tmp", "w") as f:
-        f.write(compose_content)
+    """Запуск интеграционного клиента"""
+    print_color("\n[7/9] Запуск интеграционного клиента...", Colors.YELLOW)
     
     run_command("docker-compose down")
-    run_command("docker-compose -f docker-compose.yml.tmp up -d")
     
-    print_color("OK: Client started", Colors.GREEN)
-    return True
-
-def print_info():
-    """Print access information"""
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    temp_compose = os.path.join(temp_dir, "docker-compose-temp.yml")
+    
     docker_host = get_docker_host()
     
+    compose_content = f"""services:
+  integration-client:
+    build: ./integration
+    container_name: api-integration-client
+    environment:
+      - APP_URL=http://{docker_host}:30080
+      - PROMETHEUS_URL=http://{docker_host}:30900
+      - GRAFANA_URL=http://{docker_host}:30300
+      - GRAFANA_PASSWORD=admin123
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+"""
+    
+    with open(temp_compose, "w") as f:
+        f.write(compose_content)
+    
+    try:
+        success, stdout, stderr = run_command(f'docker-compose -f "{temp_compose}" up -d')
+        if success:
+            print_color("ГОТОВО: Клиент запущен", Colors.GREEN)
+            return True
+        else:
+            print_color(f"Предупреждение: {stderr}", Colors.YELLOW)
+            return True
+    finally:
+        if os.path.exists(temp_compose):
+            os.remove(temp_compose)
+
+def setup_grafana():
+    """Настройка Grafana: добавление источника данных и дашборда"""
+    print_color("\n[8/9] Настройка Grafana...", Colors.YELLOW)
+    
+    import requests
+    
+    print_color("Ожидание готовности Grafana...", Colors.YELLOW)
+    
+    grafana_url = "http://localhost:30300"
+    max_retries = 30
+    
+    for i in range(max_retries):
+        try:
+            response = requests.get(f"{grafana_url}/api/health", timeout=5)
+            if response.status_code == 200:
+                print_color("Grafana готова!", Colors.GREEN)
+                break
+        except:
+            pass
+        time.sleep(2)
+    else:
+        print_color("Предупреждение: Grafana может быть ещё не готова", Colors.YELLOW)
+    
+    time.sleep(5)
+    
+    grafana_user = "admin"
+    grafana_password = "admin123"
+    
+    session = requests.Session()
+    
+    try:
+        login_url = f"{grafana_url}/login"
+        auth_data = {"user": grafana_user, "password": grafana_password}
+        session.post(login_url, json=auth_data)
+        
+        datasources_url = f"{grafana_url}/api/datasources"
+        response = session.get(datasources_url)
+        
+        prometheus_exists = False
+        if response.status_code == 200:
+            datasources = response.json()
+            for ds in datasources:
+                if ds.get("name") == "Prometheus":
+                    prometheus_exists = True
+                    break
+        
+        if not prometheus_exists:
+            datasource_payload = {
+                "name": "Prometheus",
+                "type": "prometheus",
+                "url": "http://monitoring-kube-prometheus-prometheus:9090",
+                "access": "proxy",
+                "isDefault": True,
+                "basicAuth": False,
+                "jsonData": {
+                    "timeInterval": "15s",
+                    "httpMethod": "POST"
+                }
+            }
+            
+            response = session.post(datasources_url, json=datasource_payload)
+            if response.status_code in [200, 409]:
+                print_color("ГОТОВО: Источник данных Prometheus добавлен", Colors.GREEN)
+            else:
+                print_color(f"Предупреждение: Не удалось добавить источник: {response.text}", Colors.YELLOW)
+        else:
+            print_color("ГОТОВО: Источник данных Prometheus уже существует", Colors.GREEN)
+        
+        dashboard_json = {
+            "dashboard": {
+                "title": "Мониторинг API приложения",
+                "tags": ["kubernetes", "fastapi", "prometheus"],
+                "timezone": "browser",
+                "refresh": "30s",
+                "time": {"from": "now-1h", "to": "now"},
+                "panels": [
+                    {
+                        "id": 1,
+                        "title": "Всего запросов",
+                        "type": "stat",
+                        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+                        "targets": [{
+                            "expr": "sum(http_requests_total)",
+                            "legendFormat": "Всего"
+                        }],
+                        "options": {
+                            "colorMode": "value",
+                            "graphMode": "none",
+                            "justifyMode": "center"
+                        },
+                        "fieldConfig": {
+                            "defaults": {
+                                "unit": "short",
+                                "decimals": 0,
+                                "color": {"mode": "thresholds"},
+                                "thresholds": {
+                                    "steps": [
+                                        {"color": "green", "value": None}
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": 2,
+                        "title": "RPS (запросов в секунду)",
+                        "type": "timeseries",
+                        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+                        "targets": [{
+                            "expr": "sum(rate(http_requests_total[1m]))",
+                            "legendFormat": "RPS"
+                        }],
+                        "options": {
+                            "legend": {"displayMode": "list", "placement": "bottom"},
+                            "tooltip": {"mode": "multi", "sort": "none"}
+                        },
+                        "fieldConfig": {
+                            "defaults": {
+                                "unit": "rps",
+                                "decimals": 2
+                            }
+                        }
+                    },
+                    {
+                        "id": 3,
+                        "title": "Время ответа (p95)",
+                        "type": "timeseries",
+                        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+                        "targets": [{
+                            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1m]))",
+                            "legendFormat": "p95"
+                        }],
+                        "options": {
+                            "legend": {"displayMode": "list", "placement": "bottom"}
+                        },
+                        "fieldConfig": {
+                            "defaults": {
+                                "unit": "s",
+                                "decimals": 3
+                            }
+                        }
+                    },
+                    {
+                        "id": 4,
+                        "title": "Запросы по эндпоинтам",
+                        "type": "barchart",
+                        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+                        "targets": [{
+                            "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
+                            "legendFormat": "{{endpoint}}"
+                        }],
+                        "options": {
+                            "orientation": "horizontal",
+                            "displayMode": "gradient",
+                            "legend": {"displayMode": "list", "placement": "right"}
+                        },
+                        "fieldConfig": {
+                            "defaults": {
+                                "unit": "rps",
+                                "decimals": 2
+                            }
+                        }
+                    },
+                    {
+                        "id": 5,
+                        "title": "Запросы по методам",
+                        "type": "piechart",
+                        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+                        "targets": [{
+                            "expr": "sum(rate(http_requests_total[1m])) by (method)",
+                            "legendFormat": "{{method}}"
+                        }],
+                        "options": {
+                            "displayLabels": ["name", "percent"],
+                            "legend": {"displayMode": "list", "placement": "right"},
+                            "pieType": "pie"
+                        },
+                        "fieldConfig": {
+                            "defaults": {
+                                "unit": "rps",
+                                "decimals": 2
+                            }
+                        }
+                    }
+                ],
+                "schemaVersion": 36
+            },
+            "overwrite": True
+        }
+        
+        dashboard_url = f"{grafana_url}/api/dashboards/db"
+        response = session.post(dashboard_url, json=dashboard_json)
+        
+        if response.status_code in [200, 409]:
+            print_color("ГОТОВО: Дашборд создан", Colors.GREEN)
+        else:
+            print_color(f"Предупреждение: Не удалось создать дашборд: {response.text}", Colors.YELLOW)
+        
+        return True
+        
+    except Exception as e:
+        print_color(f"Предупреждение: Ошибка настройки Grafana: {e}", Colors.YELLOW)
+        print_color("Вы можете подключиться к Grafana вручную: http://localhost:30300", Colors.YELLOW)
+        print_color("Логин: admin / Пароль: admin123", Colors.YELLOW)
+        return True
+
+# ============================================================
+# ФУНКЦИИ ОЧИСТКИ
+# ============================================================
+
+def clean_all():
+    """Полная очистка всех ресурсов"""
+    print_color("="*50, Colors.CYAN)
+    print_color("ОЧИСТКА ЛАБОРАТОРНОГО СТЕНДА", Colors.CYAN)
+    print_color("="*50, Colors.CYAN)
+    
+    # 1. Остановка интеграционного клиента
+    print_color("\n[1/5] Остановка интеграционного клиента...", Colors.YELLOW)
+    run_command("docker-compose down")
+    print_color("ГОТОВО: Клиент остановлен", Colors.GREEN)
+    
+    # 2. Удаление ServiceMonitor
+    print_color("\n[2/5] Удаление ServiceMonitor...", Colors.YELLOW)
+    run_command("kubectl delete servicemonitor myapp-monitor -n monitoring --ignore-not-found")
+    run_command("kubectl delete servicemonitor myapp-monitor -n default --ignore-not-found")
+    run_command("kubectl delete podmonitor myapp-podmonitor -n monitoring --ignore-not-found")
+    print_color("ГОТОВО: ServiceMonitor удалён", Colors.GREEN)
+    
+    # 3. Удаление ресурсов приложения
+    print_color("\n[3/5] Удаление ресурсов приложения...", Colors.YELLOW)
+    run_command("kubectl delete -f ./k8s/app-deployment.yaml --ignore-not-found")
+    run_command("kubectl delete -f ./k8s/app-service.yaml --ignore-not-found")
+    print_color("ГОТОВО: Ресурсы приложения удалены", Colors.GREEN)
+    
+    # 4. Удаление мониторинга
+    print_color("\n[4/5] Удаление мониторинга (Prometheus + Grafana)...", Colors.YELLOW)
+    run_command("helm uninstall monitoring -n monitoring --ignore-not-found")
+    run_command("kubectl delete pvc -n monitoring --all --ignore-not-found")
+    run_command("kubectl delete namespace monitoring --ignore-not-found")
+    print_color("ГОТОВО: Мониторинг удалён", Colors.GREEN)
+    
+    # 5. Очистка Docker
+    print_color("\n[5/5] Очистка Docker...", Colors.YELLOW)
+    run_command("docker system prune -f")
+    run_command("docker rmi myapp:latest --ignore-not-found")
+    print_color("ГОТОВО: Docker очищен", Colors.GREEN)
+    
+    print_color("\n" + "="*50, Colors.GREEN)
+    print_color("ОЧИСТКА ЗАВЕРШЕНА!", Colors.GREEN)
+    print_color("="*50, Colors.GREEN)
+    print_color("\nВсе ресурсы удалены. Для повторного запуска выполните:", Colors.YELLOW)
+    print_color("  python launcher.py --start", Colors.WHITE)
+
+def clean_partial():
+    """Частичная очистка (оставляет мониторинг)"""
+    print_color("="*50, Colors.CYAN)
+    print_color("ЧАСТИЧНАЯ ОЧИСТКА (мониторинг остаётся)", Colors.CYAN)
+    print_color("="*50, Colors.CYAN)
+    
+    # 1. Остановка интеграционного клиента
+    print_color("\n[1/3] Остановка интеграционного клиента...", Colors.YELLOW)
+    run_command("docker-compose down")
+    print_color("ГОТОВО: Клиент остановлен", Colors.GREEN)
+    
+    # 2. Удаление ServiceMonitor
+    print_color("\n[2/3] Удаление ServiceMonitor...", Colors.YELLOW)
+    run_command("kubectl delete servicemonitor myapp-monitor -n monitoring --ignore-not-found")
+    run_command("kubectl delete servicemonitor myapp-monitor -n default --ignore-not-found")
+    print_color("ГОТОВО: ServiceMonitor удалён", Colors.GREEN)
+    
+    # 3. Удаление ресурсов приложения
+    print_color("\n[3/3] Удаление ресурсов приложения...", Colors.YELLOW)
+    run_command("kubectl delete -f ./k8s/app-deployment.yaml --ignore-not-found")
+    run_command("kubectl delete -f ./k8s/app-service.yaml --ignore-not-found")
+    print_color("ГОТОВО: Ресурсы приложения удалены", Colors.GREEN)
+    
+    print_color("\n" + "="*50, Colors.GREEN)
+    print_color("ЧАСТИЧНАЯ ОЧИСТКА ЗАВЕРШЕНА!", Colors.GREEN)
+    print_color("="*50, Colors.GREEN)
+    print_color("\nМониторинг (Prometheus + Grafana) остаётся.", Colors.YELLOW)
+    print_color("Для полной очистки выполните: python launcher.py --clean-all", Colors.WHITE)
+
+def print_info():
+    """Вывод информации о доступе к сервисам"""
     print_color("\n" + "="*50, Colors.CYAN)
-    print_color("READY! Access to services:", Colors.GREEN)
+    print_color("ГОТОВО! Доступ к сервисам:", Colors.GREEN)
     print_color("="*50, Colors.CYAN)
-    print_color(f"  API: http://localhost:30080", Colors.WHITE)
-    print_color(f"  Prometheus: http://localhost:30900", Colors.WHITE)
-    print_color(f"  Grafana: http://localhost:30300 (admin/admin123)", Colors.WHITE)
+    print_color("  API приложения: http://localhost:30080", Colors.WHITE)
+    print_color("  Prometheus: http://localhost:30900", Colors.WHITE)
+    print_color("  Grafana: http://localhost:30300 (admin/admin123)", Colors.WHITE)
     print_color("="*50, Colors.CYAN)
-    print_color("\nClient logs: docker-compose logs -f", Colors.YELLOW)
-    print_color("Stop: docker-compose down", Colors.YELLOW)
+    print_color("\nДашборд 'Мониторинг API приложения' готов!", Colors.GREEN)
+    print_color("\nПолезные команды:", Colors.YELLOW)
+    print_color("  Логи клиента: docker-compose logs -f", Colors.WHITE)
+    print_color("  Остановка клиента: docker-compose down", Colors.WHITE)
+    print_color("  Полная очистка: python launcher.py --clean-all", Colors.WHITE)
+    print_color("  Частичная очистка: python launcher.py --clean", Colors.WHITE)
 
 def main():
-    """Main function"""
-    print_color("="*50, Colors.CYAN)
-    print_color("Kubernetes Lab - Universal Launcher", Colors.CYAN)
-    print_color("="*50, Colors.CYAN)
-    print_color(f"Platform: {platform.system()} {platform.release()}", Colors.YELLOW)
+    """Главная функция с поддержкой аргументов командной строки"""
+    parser = argparse.ArgumentParser(description='Kubernetes Lab - Управление стендом')
+    parser.add_argument('--start', action='store_true', help='Запуск стенда')
+    parser.add_argument('--clean', action='store_true', help='Частичная очистка (оставляет мониторинг)')
+    parser.add_argument('--clean-all', action='store_true', help='Полная очистка (удаляет всё)')
     
-    # Disable colors on Windows if needed
-    if platform.system() == "Windows" and os.environ.get("NO_COLOR"):
-        Colors.disable()
+    args = parser.parse_args()
     
-    # Run steps
-    steps = [
-        check_docker,
-        check_kubernetes,
-        build_app,
-        deploy_app,
-        install_monitoring,
-        create_servicemonitor,
-        start_client
-    ]
+    # Если нет аргументов или указан --start, запускаем стенд
+    if not any([args.start, args.clean, args.clean_all]):
+        args.start = True
     
-    for step in steps:
-        if not step():
-            print_color("\nFAILED! Stopping...", Colors.RED)
+    if args.clean_all:
+        clean_all()
+        return
+    elif args.clean:
+        clean_partial()
+        return
+    elif args.start:
+        print_color("="*50, Colors.CYAN)
+        print_color("Kubernetes Lab - Универсальный запускатор", Colors.CYAN)
+        print_color("="*50, Colors.CYAN)
+        print_color(f"Платформа: {platform.system()} {platform.release()}", Colors.YELLOW)
+        
+        # Проверка зависимостей
+        if not check_dependencies():
             sys.exit(1)
-    
-    print_info()
+        
+        steps = [
+            check_docker,
+            check_kubernetes,
+            build_app,
+            deploy_app,
+            install_monitoring,
+            create_podmonitor,
+            start_client,
+            setup_grafana
+        ]
+        
+        for step in steps:
+            if not step():
+                print_color("\nОСТАНОВКА! Произошла ошибка...", Colors.RED)
+                sys.exit(1)
+        
+        print_info()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print_color("\n\nПрервано пользователем", Colors.YELLOW)
+        sys.exit(0)
