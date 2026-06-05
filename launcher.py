@@ -29,10 +29,14 @@ def print_color(text, color=Colors.CYAN):
 def run_command(cmd, shell=False):
     """Выполнение команды и возврат результата"""
     try:
-        if platform.system() == "Windows":
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if isinstance(cmd, str):
+            if shell:
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            else:
+                # Разбиваем строку на аргументы
+                result = subprocess.run(cmd.split(), capture_output=True, text=True)
         else:
-            result = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True)
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)

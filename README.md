@@ -72,9 +72,9 @@ python launcher.py --start
 
 | Сервис | URL | Данные для входа |
 |----------|----------------------------|----------------|
-| API | http://localhost:30080 | - |
-| Prometheus | http://localhost:30900 | - |
-| Grafana | http://localhost:30300 | `admin / admin123` |
+| API | <http://localhost:30080> | - |
+| Prometheus | <http://localhost:30900> | - |
+| Grafana | <http://localhost:30300> | `admin / admin123` |
 
 ---
 
