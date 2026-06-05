@@ -79,16 +79,36 @@ def check_docker():
 def check_kubernetes():
     """Проверка доступности Kubernetes"""
     print_color("\n[2/9] Проверка Kubernetes...", Colors.YELLOW)
+    
+    # Проверяем kubectl
     success, stdout, stderr = run_command("kubectl cluster-info")
     if success:
         print_color("ГОТОВО: Kubernetes работает", Colors.GREEN)
         return True
+    
+    # Если kubectl не работает, пробуем запустить Minikube
+    print_color("Kubernetes не запущен. Пробуем запустить Minikube...", Colors.YELLOW)
+    
+    # Проверяем, установлен ли Minikube
+    success, stdout, stderr = run_command("which minikube")
+    if not success:
+        print_color("Minikube не установлен. Устанавливаем...", Colors.YELLOW)
+        run_command("curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64")
+        run_command("sudo install minikube-linux-amd64 /usr/local/bin/minikube")
+        run_command("rm minikube-linux-amd64")
+    
+    # Запускаем Minikube с драйвером docker
+    print_color("Запуск Minikube (это может занять несколько минут)...", Colors.YELLOW)
+    run_command("minikube start --driver=docker")
+    
+    # Проверяем снова
+    success, stdout, stderr = run_command("kubectl cluster-info")
+    if success:
+        print_color("ГОТОВО: Minikube запущен и работает", Colors.GREEN)
+        return True
     else:
-        print_color("ОШИБКА: Kubernetes недоступен!", Colors.RED)
-        if platform.system() == "Windows":
-            print_color("Убедитесь, что Kubernetes включен в Docker Desktop", Colors.YELLOW)
-        else:
-            print_color("Запустите: minikube start или kind create cluster", Colors.YELLOW)
+        print_color("ОШИБКА: Не удалось запустить Kubernetes", Colors.RED)
+        print_color("Запустите вручную: minikube start --driver=docker", Colors.YELLOW)
         return False
 
 def get_docker_host():
