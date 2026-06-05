@@ -26,6 +26,23 @@ def print_color(text, color=Colors.CYAN):
     """Вывод цветного текста"""
     print(f"{color}{text}{Colors.RESET}")
 
+def detect_environment():
+    """Определяет окружение: Docker Desktop или Minikube"""
+    system = platform.system()
+    
+    # Windows с Docker Desktop
+    if system == "Windows":
+        return "docker-desktop"
+    
+    # Linux с Minikube
+    if system == "Linux":
+        success, stdout, stderr = run_command("minikube status")
+        if success and "Running" in stdout:
+            return "minikube"
+        return "minikube-needs-start"
+    
+    return "unknown"
+
 def run_command(cmd, shell=False):
     """Выполнение команды и возврат результата"""
     try:
@@ -80,36 +97,26 @@ def check_kubernetes():
     """Проверка доступности Kubernetes"""
     print_color("\n[2/9] Проверка Kubernetes...", Colors.YELLOW)
     
-    # Проверяем kubectl
-    success, stdout, stderr = run_command("kubectl cluster-info")
-    if success:
-        print_color("ГОТОВО: Kubernetes работает", Colors.GREEN)
+    env = detect_environment()
+    
+    if env == "docker-desktop":
+        success, stdout, stderr = run_command("kubectl cluster-info")
+        if success:
+            print_color("ГОТОВО: Kubernetes (Docker Desktop) работает", Colors.GREEN)
+            return True
+    
+    elif env == "minikube":
+        print_color("ГОТОВО: Minikube уже запущен", Colors.GREEN)
         return True
     
-    # Если kubectl не работает, пробуем запустить Minikube
-    print_color("Kubernetes не запущен. Пробуем запустить Minikube...", Colors.YELLOW)
-    
-    # Проверяем, установлен ли Minikube
-    success, stdout, stderr = run_command("which minikube")
-    if not success:
-        print_color("Minikube не установлен. Устанавливаем...", Colors.YELLOW)
-        run_command("curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64")
-        run_command("sudo install minikube-linux-amd64 /usr/local/bin/minikube")
-        run_command("rm minikube-linux-amd64")
-    
-    # Запускаем Minikube с драйвером docker
-    print_color("Запуск Minikube (это может занять несколько минут)...", Colors.YELLOW)
-    run_command("minikube start --driver=docker")
-    
-    # Проверяем снова
-    success, stdout, stderr = run_command("kubectl cluster-info")
-    if success:
-        print_color("ГОТОВО: Minikube запущен и работает", Colors.GREEN)
+    elif env == "minikube-needs-start":
+        print_color("Запуск Minikube...", Colors.YELLOW)
+        run_command("minikube start --driver=docker")
+        print_color("ГОТОВО: Minikube запущен", Colors.GREEN)
         return True
-    else:
-        print_color("ОШИБКА: Не удалось запустить Kubernetes", Colors.RED)
-        print_color("Запустите вручную: minikube start --driver=docker", Colors.YELLOW)
-        return False
+    
+    print_color("ОШИБКА: Kubernetes недоступен!", Colors.RED)
+    return False
 
 def get_docker_host():
     """Получение адреса хоста Docker для разных платформ"""
@@ -126,24 +133,48 @@ def get_docker_host():
         return "localhost"
 
 def build_app():
-    """Сборка Docker образа приложения"""
+    """Сборка Docker образа приложения (работает в любом окружении)"""
     print_color("\n[3/9] Сборка образа myapp...", Colors.YELLOW)
+    
+    # Определяем окружение
+    in_minikube = False
+    try:
+        # Проверяем, запущен ли Minikube
+        success, stdout, stderr = run_command("minikube status")
+        if success and "Running" in stdout:
+            in_minikube = True
+            print_color("Обнаружен Minikube, загружаем образ в Minikube...", Colors.YELLOW)
+    except:
+        pass
+    
+    # Собираем образ
     success, stdout, stderr = run_command("docker build -t myapp:latest ./app")
-    if success:
-        print_color("ГОТОВО: Образ собран", Colors.GREEN)
-        return True
-    else:
+    if not success:
         print_color(f"ОШИБКА: Не удалось собрать образ: {stderr}", Colors.RED)
         return False
+    
+    # Если Minikube — загружаем образ в него
+    if in_minikube:
+        print_color("Загрузка образа в Minikube...", Colors.YELLOW)
+        run_command("minikube image load myapp:latest")
+    
+    print_color("ГОТОВО: Образ собран", Colors.GREEN)
+    return True
 
 def deploy_app():
     """Деплой приложения в Kubernetes"""
     print_color("\n[4/9] Деплой приложения в Kubernetes...", Colors.YELLOW)
     
+    # Применяем манифесты
     run_command("kubectl apply -f ./k8s/app-deployment.yaml")
     run_command("kubectl apply -f ./k8s/app-service.yaml")
     
-    print_color("Ожидание запуска подов myapp...", Colors.YELLOW)
+    # Добавляем imagePullPolicy: Never для Minikube/Kind
+    print_color("Настройка imagePullPolicy для локального образа...", Colors.YELLOW)
+    run_command("kubectl patch deployment myapp -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"myapp\",\"imagePullPolicy\":\"Never\"}]}}}}'")
+    
+    # Ожидание
+    print_color("Ожидание подов myapp...", Colors.YELLOW)
     time.sleep(10)
     
     success, stdout, stderr = run_command("kubectl wait --for=condition=ready pod -l app=myapp --timeout=60s")
