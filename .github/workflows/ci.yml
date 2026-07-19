@@ -87,3 +87,31 @@ jobs:
           tags: |
             ghcr.io/lovelybbot/k8s-labs/myapp:latest
             ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
+
+  # CD-звено (GitOps): прописывает свежесобранный тег в манифест и коммитит
+  # в main. Argo CD в кластере видит новый коммит и раскатывает его сам.
+  # Коммиты от GITHUB_TOKEN не запускают workflow повторно (защита GitHub
+  # от рекурсии), [skip ci] в сообщении — дополнительная страховка.
+  update-manifest:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image tag to commit SHA
+        run: >
+          sed -i
+          "s|image: ghcr.io/lovelybbot/k8s-labs/myapp:.*|image: ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}|"
+          k8s/app-deployment.yaml
+
+      - name: Commit and push manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/app-deployment.yaml
+          git diff --cached --quiet || git commit -m "cd: деплой myapp:${{ github.sha }} [skip ci]"
+          git push

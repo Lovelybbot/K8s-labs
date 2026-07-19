@@ -19,12 +19,11 @@ spec:
     spec:
       containers:
       - name: myapp
-        # Образ собирается CI-пайплайном и публикуется в GHCR (job build в ci.yml).
-        # Тег latest перезаписывается при каждом push в main, поэтому
-        # imagePullPolicy: Always — иначе узел продолжит использовать
-        # старую скачанную версию и обновления никогда не доедут.
+        # Тег образа обновляет job update-manifest в CI: после каждой сборки
+        # сюда коммитится SHA нового образа, а Argo CD раскатывает изменение.
+        # Теги по SHA неизменяемы, поэтому достаточно IfNotPresent.
         image: ghcr.io/lovelybbot/k8s-labs/myapp:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
           name: http
