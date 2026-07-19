@@ -1,5 +1,7 @@
 # CI-пайплайн: запускается на каждый push в main и на каждый pull request.
 # Job "test" гоняет линтер и тесты в том же Python 3.11, что и Docker-образ.
+# Job "build" (только push в main, после успешных тестов) собирает Docker-образ
+# и публикует его в GitHub Container Registry (ghcr.io).
 name: CI
 
 on:
@@ -30,3 +32,36 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -v
+
+  build:
+    # needs: тесты — обязательное условие; if: собираем только main, не PR
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # GITHUB_TOKEN по умолчанию не может писать в реестр — выдаём право явно.
+    # Когда permissions указан, все остальные права сбрасываются в none,
+    # поэтому contents: read нужен для checkout.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          push: true
+          # Имя в GHCR обязано быть в нижнем регистре.
+          # Тег по SHA коммита позволяет откатиться на любую версию.
+          tags: |
+            ghcr.io/lovelybbot/k8s-labs/myapp:latest
+            ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
