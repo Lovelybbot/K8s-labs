@@ -220,7 +220,9 @@ spec:
         f.write(pm_yaml)
     
     try:
-        success, stdout, stderr = run_command(f'kubectl apply -f "{temp_file}"')
+        # Аргументы списком: run_command разбивает строку по пробелам,
+        # из-за чего кавычки вокруг пути попадали в аргумент как есть
+        success, stdout, stderr = run_command(["kubectl", "apply", "-f", temp_file])
         if success:
             print_color("ГОТОВО: PodMonitor создан", Colors.GREEN)
             return True
@@ -263,7 +265,7 @@ def start_client():
         f.write(compose_content)
     
     try:
-        success, stdout, stderr = run_command(f'docker-compose -f "{temp_compose}" up -d')
+        success, stdout, stderr = run_command(["docker-compose", "-f", temp_compose, "up", "-d"])
         if success:
             print_color("ГОТОВО: Клиент запущен", Colors.GREEN)
             return True
