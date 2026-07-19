@@ -60,7 +60,7 @@ def run_command(cmd, shell=False):
 
 def check_dependencies():
     """Проверка и установка необходимых Python пакетов"""
-    print_color("\n[0/9] Проверка зависимостей...", Colors.YELLOW)
+    print_color("\n[0/8] Проверка зависимостей...", Colors.YELLOW)
     
     try:
         import requests
@@ -80,7 +80,7 @@ def check_dependencies():
 
 def check_docker():
     """Проверка работы Docker"""
-    print_color("\n[1/9] Проверка Docker...", Colors.YELLOW)
+    print_color("\n[1/8] Проверка Docker...", Colors.YELLOW)
     success, stdout, stderr = run_command("docker info")
     if success:
         print_color("ГОТОВО: Docker работает", Colors.GREEN)
@@ -95,7 +95,7 @@ def check_docker():
 
 def check_kubernetes():
     """Проверка доступности Kubernetes"""
-    print_color("\n[2/9] Проверка Kubernetes...", Colors.YELLOW)
+    print_color("\n[2/8] Проверка Kubernetes...", Colors.YELLOW)
     
     env = detect_environment()
     
@@ -132,62 +132,33 @@ def get_docker_host():
     else:
         return "localhost"
 
-def build_app():
-    """Сборка Docker образа приложения (работает в любом окружении)"""
-    print_color("\n[3/9] Сборка образа myapp...", Colors.YELLOW)
-    
-    # Определяем окружение
-    in_minikube = False
-    try:
-        # Проверяем, запущен ли Minikube
-        success, stdout, stderr = run_command("minikube status")
-        if success and "Running" in stdout:
-            in_minikube = True
-            print_color("Обнаружен Minikube, загружаем образ в Minikube...", Colors.YELLOW)
-    except:
-        pass
-    
-    # Собираем образ
-    success, stdout, stderr = run_command("docker build -t myapp:latest ./app")
-    if not success:
-        print_color(f"ОШИБКА: Не удалось собрать образ: {stderr}", Colors.RED)
-        return False
-    
-    # Если Minikube — загружаем образ в него
-    if in_minikube:
-        print_color("Загрузка образа в Minikube...", Colors.YELLOW)
-        run_command("minikube image load myapp:latest")
-    
-    print_color("ГОТОВО: Образ собран", Colors.GREEN)
-    return True
-
 def deploy_app():
-    """Деплой приложения в Kubernetes"""
-    print_color("\n[4/9] Деплой приложения в Kubernetes...", Colors.YELLOW)
-    
+    """Деплой приложения в Kubernetes.
+
+    Образ не собирается локально: манифест ссылается на
+    ghcr.io/lovelybbot/k8s-labs/myapp, который собирает и публикует
+    CI-пайплайн (.github/workflows/ci.yml) при каждом push в main.
+    Кластер сам скачивает образ из реестра.
+    """
+    print_color("\n[3/8] Деплой приложения в Kubernetes...", Colors.YELLOW)
+
     # Применяем манифесты
     run_command("kubectl apply -f ./k8s/app-deployment.yaml")
     run_command("kubectl apply -f ./k8s/app-service.yaml")
-    
-    # Добавляем imagePullPolicy: Never для Minikube/Kind
-    print_color("Настройка imagePullPolicy для локального образа...", Colors.YELLOW)
-    run_command("kubectl patch deployment myapp -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"myapp\",\"imagePullPolicy\":\"Never\"}]}}}}'")
-    
-    # Ожидание
-    print_color("Ожидание подов myapp...", Colors.YELLOW)
-    time.sleep(10)
-    
-    success, stdout, stderr = run_command("kubectl wait --for=condition=ready pod -l app=myapp --timeout=60s")
+
+    print_color("Ожидание раскатки (образ скачивается из GHCR)...", Colors.YELLOW)
+    success, stdout, stderr = run_command("kubectl rollout status deployment/myapp --timeout=180s")
     if success:
         print_color("ГОТОВО: Приложение запущено", Colors.GREEN)
         return True
     else:
         print_color("Предупреждение: Поды могут быть ещё не готовы", Colors.YELLOW)
+        print_color("Проверьте: kubectl get pods -l app=myapp", Colors.YELLOW)
         return True
 
 def install_monitoring():
     """Установка Prometheus и Grafana"""
-    print_color("\n[5/9] Установка Prometheus + Grafana...", Colors.YELLOW)
+    print_color("\n[4/8] Установка Prometheus + Grafana...", Colors.YELLOW)
     
     success, stdout, stderr = run_command("helm list -n monitoring")
     if "monitoring" in stdout:
@@ -217,7 +188,7 @@ def install_monitoring():
 
 def create_podmonitor():
     """Создание PodMonitor для myapp"""
-    print_color("\n[6/9] Создание PodMonitor...", Colors.YELLOW)
+    print_color("\n[5/8] Создание PodMonitor...", Colors.YELLOW)
     
     run_command("kubectl delete podmonitor myapp-podmonitor -n monitoring --ignore-not-found")
     
@@ -262,7 +233,7 @@ spec:
 
 def start_client():
     """Запуск интеграционного клиента"""
-    print_color("\n[7/9] Запуск интеграционного клиента...", Colors.YELLOW)
+    print_color("\n[6/8] Запуск интеграционного клиента...", Colors.YELLOW)
     
     run_command("docker-compose down")
     
@@ -305,7 +276,7 @@ def start_client():
 
 def setup_grafana():
     """Настройка Grafana: добавление источника данных и дашборда"""
-    print_color("\n[8/9] Настройка Grafana...", Colors.YELLOW)
+    print_color("\n[7/8] Настройка Grafana...", Colors.YELLOW)
     
     import requests
     
@@ -546,7 +517,6 @@ def clean_all():
     # 5. Очистка Docker
     print_color("\n[5/5] Очистка Docker...", Colors.YELLOW)
     run_command("docker system prune -f")
-    run_command("docker rmi myapp:latest --ignore-not-found")
     print_color("ГОТОВО: Docker очищен", Colors.GREEN)
     
     print_color("\n" + "="*50, Colors.GREEN)
@@ -632,7 +602,6 @@ def main():
         steps = [
             check_docker,
             check_kubernetes,
-            build_app,
             deploy_app,
             install_monitoring,
             create_podmonitor,
