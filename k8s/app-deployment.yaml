@@ -22,7 +22,7 @@ spec:
         # Тег образа обновляет job update-manifest в CI: после каждой сборки
         # сюда коммитится SHA нового образа, а Argo CD раскатывает изменение.
         # Теги по SHA неизменяемы, поэтому достаточно IfNotPresent.
-        image: ghcr.io/lovelybbot/k8s-labs/myapp:latest
+        image: ghcr.io/lovelybbot/k8s-labs/myapp:0f5bbf6272587302f5a348439817c1c256f4720c
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
