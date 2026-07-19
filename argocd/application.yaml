@@ -1,0 +1,26 @@
+# Argo CD Application: декларация "что и откуда деплоить".
+# Применяется в кластер один раз (kubectl apply -f argocd/application.yaml),
+# дальше Argo CD сам следит за папкой k8s/ в main и приводит кластер
+# в соответствие с git — это и есть GitOps (pull-модель CD).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: myapp
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Lovelybbot/K8s-labs.git
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      # prune: удалять из кластера ресурсы, исчезнувшие из git
+      prune: true
+      # selfHeal: откатывать ручные правки кластера к состоянию из git
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
