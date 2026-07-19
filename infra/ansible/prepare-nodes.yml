@@ -1,0 +1,97 @@
+---
+- name: Подготовка нод Kubernetes
+  hosts: all
+  become: true
+
+  handlers:
+    # Хэндлер выполняется ОДИН раз в конце игры и только если
+    # хоть одна задача с notify реально что-то изменила
+    - name: Restart containerd
+      ansible.builtin.systemd_service:
+        name: containerd
+        state: restarted
+
+  tasks:
+    # ---------- Блок 1: swap ----------
+    - name: Выключить swap (до перезагрузки)
+      ansible.builtin.shell: swapoff -a
+      # Условие по факту хоста: swap уже нулевой -> задача скипается,
+      # иначе голый shell всегда рапортовал бы "changed"
+      when: ansible_swaptotal_mb > 0
+
+    - name: Закомментировать swap в fstab (навсегда)
+      ansible.builtin.replace:
+        path: /etc/fstab
+        regexp: '^([^#].*\sswap\s.*)$'
+        replace: '# \1'
+
+    # ---------- Блок 2: модули ядра и sysctl ----------
+    - name: Модули ядра — автозагрузка при старте системы
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+
+    - name: Модули ядра — загрузить сейчас
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Сетевые параметры ядра
+      ansible.posix.sysctl:
+        name: "{{ item }}"
+        value: "1"
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        reload: true
+      loop:
+        - net.bridge.bridge-nf-call-iptables
+        - net.bridge.bridge-nf-call-ip6tables
+        - net.ipv4.ip_forward
+
+    # ---------- Блок 3: containerd ----------
+    - name: Установить containerd
+      ansible.builtin.apt:
+        name: containerd
+        state: present
+        update_cache: true
+
+    - name: Сгенерировать дефолтный конфиг containerd
+      ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+      args:
+        # "если файл уже есть — не выполнять": идемпотентность для shell
+        creates: /etc/containerd/config.toml
+
+    - name: cgroups через systemd (грабли №1)
+      ansible.builtin.replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+      notify: Restart containerd
+
+    # ---------- Блок 4: kubeadm / kubelet / kubectl ----------
+    # CDN pkgs.k8s.io из VM недоступен, поэтому .deb лежат в WSL
+    # (~/k8s-debs после apt-get download) и заливаются плейбуком.
+    # В /tmp, а не в home: пользователь _apt не умеет читать /home/*
+    - name: Скопировать .deb-пакеты на ноду
+      ansible.builtin.copy:
+        src: ~/k8s-debs/
+        dest: /tmp/k8s-debs/
+
+    - name: Установить пакеты Kubernetes
+      ansible.builtin.shell: >
+        apt-get install -y --allow-change-held-packages /tmp/k8s-debs/*.deb
+      args:
+        creates: /usr/bin/kubeadm
+
+    - name: Зафиксировать версии (обновление k8s — осознанный шаг)
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl

@@ -1,0 +1,84 @@
+---
+# ============================================================
+# Play 1: control-plane. Выполняется только на группе [master]
+# ============================================================
+- name: Инициализация control-plane
+  hosts: master
+  become: true
+
+  tasks:
+    - name: kubeadm init
+      ansible.builtin.shell: >
+        kubeadm init
+        --pod-network-cidr=10.244.0.0/16
+        --apiserver-advertise-address={{ ansible_host }}
+      args:
+        # След init на диске: файл существует -> кластер уже
+        # инициализирован -> задачу не выполнять. Та самая головоломка.
+        creates: /etc/kubernetes/admin.conf
+
+    # kubectl для обычного пользователя: те три команды из вывода init,
+    # переведённые в декларативные модули
+    - name: Каталог .kube
+      ansible.builtin.file:
+        path: /home/k8s/.kube
+        state: directory
+        owner: k8s
+        group: k8s
+        mode: "0755"
+
+    - name: Отдать kubeconfig пользователю
+      ansible.builtin.copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/k8s/.kube/config
+        remote_src: true      # копируем файл, УЖЕ лежащий на ноде (не с WSL)
+        owner: k8s
+        group: k8s
+        mode: "0600"
+
+    - name: Получить свежую команду join
+      ansible.builtin.shell: kubeadm token create --print-join-command
+      # register сохраняет результат команды в переменную —
+      # это способ передавать данные между задачами и даже плеями
+      register: join_cmd
+      # команда каждый раз создаёт новый токен (живёт 24ч) — это не
+      # изменение конфигурации ноды, поэтому глушим вечный "changed"
+      changed_when: false
+
+# ============================================================
+# Play 2: worker-ноды. Своя группа — и данные из чужого плея
+# ============================================================
+- name: Присоединение worker-нод
+  hosts: workers
+  become: true
+
+  tasks:
+    - name: kubeadm join
+      # hostvars — доступ к переменным ДРУГОГО хоста: забираем
+      # join_cmd, зарегистрированный на мастере в Play 1
+      ansible.builtin.shell: "{{ hostvars[groups['master'][0]].join_cmd.stdout }}"
+      args:
+        # След join на worker'е — kubelet.conf
+        creates: /etc/kubernetes/kubelet.conf
+
+# ============================================================
+# Play 3: CNI Calico. Снова мастер, но уже БЕЗ root:
+# kubectl работает под пользователем k8s с его ~/.kube/config
+# ============================================================
+- name: Установка CNI Calico
+  hosts: master
+  become: false
+
+  tasks:
+    - name: Доставить calico.yaml (подготовленный, CIDR 10.244.0.0/16)
+      ansible.builtin.copy:
+        src: ~/calico.yaml          # лежит в home WSL после curl -LO
+        dest: /home/k8s/calico.yaml
+
+    - name: Применить Calico
+      ansible.builtin.command: kubectl apply -f /home/k8s/calico.yaml
+      register: calico_result
+      # kubectl apply идемпотентен сам, но Ansible этого не знает.
+      # Учим его читать вывод: "created/configured" = изменил,
+      # "unchanged" = нет
+      changed_when: "'created' in calico_result.stdout or 'configured' in calico_result.stdout"

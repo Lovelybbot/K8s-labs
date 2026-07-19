@@ -1,0 +1,11 @@
+---
+- name: Установка htop для мониторинга      # описание для человека
+  hosts: all                                # ГДЕ: группа из inventory (all / master / workers)
+  become: true                              # ПРАВАМИ: sudo (ставить пакеты без него нельзя)
+
+  tasks:                                    # ЧТО: список задач сверху вниз
+    - name: Установить htop                 # имя задачи — видно в выводе при запуске
+      ansible.builtin.apt:                  # модуль
+        name: htop                           # его параметры
+        state: present
+        update_cache: true
