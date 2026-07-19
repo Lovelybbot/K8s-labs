@@ -113,7 +113,7 @@ jobs:
       # python-пакетах. Мягкий режим: exit-code 0 — отчёт в логе, пайплайн
       # не падает. Для строгого режима поменяйте exit-code на 1.
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
           format: table
