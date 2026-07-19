@@ -5,6 +5,8 @@ metadata:
   namespace: monitoring
   labels:
     release: monitoring
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   selector:
     matchLabels:
