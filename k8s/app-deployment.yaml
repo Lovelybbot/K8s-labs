@@ -19,8 +19,12 @@ spec:
     spec:
       containers:
       - name: myapp
-        image: myapp:latest
-        imagePullPolicy: IfNotPresent
+        # Образ собирается CI-пайплайном и публикуется в GHCR (job build в ci.yml).
+        # Тег latest перезаписывается при каждом push в main, поэтому
+        # imagePullPolicy: Always — иначе узел продолжит использовать
+        # старую скачанную версию и обновления никогда не доедут.
+        image: ghcr.io/lovelybbot/k8s-labs/myapp:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
           name: http
