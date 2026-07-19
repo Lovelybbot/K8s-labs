@@ -1,0 +1,131 @@
+# Дашборд Grafana "как код": sidecar Grafana (входит в kube-prometheus-stack)
+# следит за ConfigMap с меткой grafana_dashboard: "1" и сам импортирует JSON.
+# Дашборд перенесён из launcher.py (setup_grafana), доставляется через Argo CD.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myapp-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  myapp-dashboard.json: |
+    {
+      "uid": "myapp-api",
+      "title": "Мониторинг API приложения",
+      "tags": ["kubernetes", "fastapi", "prometheus"],
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Всего запросов",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+          "targets": [{
+            "expr": "sum(http_requests_total)",
+            "legendFormat": "Всего"
+          }],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "decimals": 0,
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": null}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "RPS (запросов в секунду)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total[1m]))",
+            "legendFormat": "RPS"
+          }],
+          "options": {
+            "legend": {"displayMode": "list", "placement": "bottom"},
+            "tooltip": {"mode": "multi", "sort": "none"}
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rps",
+              "decimals": 2
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Время ответа (p95)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+          "targets": [{
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[1m]))",
+            "legendFormat": "p95"
+          }],
+          "options": {
+            "legend": {"displayMode": "list", "placement": "bottom"}
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "decimals": 3
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Запросы по эндпоинтам",
+          "type": "barchart",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
+            "legendFormat": "{{endpoint}}"
+          }],
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "legend": {"displayMode": "list", "placement": "right"}
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rps",
+              "decimals": 2
+            }
+          }
+        },
+        {
+          "id": 5,
+          "title": "Запросы по методам",
+          "type": "piechart",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "targets": [{
+            "expr": "sum(rate(http_requests_total[1m])) by (method)",
+            "legendFormat": "{{method}}"
+          }],
+          "options": {
+            "displayLabels": ["name", "percent"],
+            "legend": {"displayMode": "list", "placement": "right"},
+            "pieType": "pie"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "rps",
+              "decimals": 2
+            }
+          }
+        }
+      ],
+      "schemaVersion": 36
+    }
