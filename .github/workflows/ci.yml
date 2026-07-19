@@ -139,6 +139,11 @@ jobs:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Несколько merge подряд = несколько параллельных запусков этого job,
+    # и их push'и в main гоняются друг с другом. Concurrency выстраивает
+    # запуски в очередь по одному.
+    concurrency:
+      group: update-manifest-main
     permissions:
       contents: write
     steps:
@@ -157,4 +162,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add k8s/app-deployment.yaml
           git diff --cached --quiet || git commit -m "cd: деплой myapp:${{ github.sha }} [skip ci]"
+          # Подстраховка от гонки: если main уехал за время сборки,
+          # переносим свой коммит поверх свежего состояния
+          git pull --rebase origin main
           git push
