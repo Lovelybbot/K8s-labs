@@ -1,6 +1,7 @@
 # CI-пайплайн: запускается на каждый push в main и на каждый pull request.
 # Job "test" гоняет линтер и тесты в том же Python 3.11, что и Docker-образ.
-# Job "build" (только push в main, после успешных тестов) собирает Docker-образ
+# Job "validate-manifests" проверяет YAML в k8s/ по JSON-схемам Kubernetes.
+# Job "build" (только push в main, после успешных проверок) собирает Docker-образ
 # и публикует его в GitHub Container Registry (ghcr.io).
 name: CI
 
@@ -33,9 +34,30 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -v
 
+  validate-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+
+      # -strict запрещает неизвестные поля (ловит опечатки вроде replicsa).
+      # Вторая schema-location нужна для CRD (PodMonitor — не встроенный ресурс,
+      # его схема берётся из каталога CRDs-catalog).
+      - name: Validate Kubernetes manifests
+        run: >
+          kubeconform -strict -summary
+          -schema-location default
+          -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          k8s/
+
   build:
-    # needs: тесты — обязательное условие; if: собираем только main, не PR
-    needs: test
+    # needs: все проверки — обязательное условие; if: собираем только main, не PR
+    needs: [test, validate-manifests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # GITHUB_TOKEN по умолчанию не может писать в реестр — выдаём право явно.
