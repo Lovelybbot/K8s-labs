@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_health_returns_200():
     response = client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "healthy"}
 
 
 def test_metrics_endpoint_exposes_prometheus_format():
