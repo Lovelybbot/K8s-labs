@@ -109,16 +109,27 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Скан образа на известные уязвимости (CVE) в базовом образе и
-      # python-пакетах. Мягкий режим: exit-code 0 — отчёт в логе, пайплайн
-      # не падает. Для строгого режима поменяйте exit-code на 1.
-      - name: Scan image with Trivy
+      # Отчёт по всем HIGH/CRITICAL — только информирование (exit-code 0):
+      # в базовом образе всегда есть неисправимые CVE, падать из-за них глупо
+      - name: Trivy report (HIGH+CRITICAL, informational)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
           format: table
           severity: HIGH,CRITICAL
           exit-code: "0"
+
+      # Гейт: валим сборку только на CRITICAL, для которых УЖЕ есть fix
+      # (ignore-unfixed) — то, что реально можно закрыть пересборкой.
+      # На 2026-07: 3 CRITICAL в perl-base без фикса — гейт их пропускает.
+      - name: Trivy gate (fixable CRITICAL only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
 
   # CD-звено (GitOps): прописывает свежесобранный тег в манифест и коммитит
   # в main. Argo CD в кластере видит новый коммит и раскатывает его сам.
