@@ -1,13 +1,15 @@
 # CI-пайплайн: запускается на каждый push в main и на каждый pull request.
 # Job "test" гоняет линтер и тесты в том же Python 3.11, что и Docker-образ.
 # Job "validate-manifests" проверяет YAML в k8s/ по JSON-схемам Kubernetes.
-# Job "build" (только push в main, после успешных проверок) собирает Docker-образ
-# и публикует его в GitHub Container Registry (ghcr.io).
+# Job "build" (push в main или релизный тег v*, после успешных проверок)
+# собирает Docker-образ с кэшем слоёв, публикует его в GHCR и сканирует Trivy.
 name: CI
 
 on:
   push:
     branches: [main]
+    # Git-теги вида v1.0.0 собирают именованный релиз с тегами v1.0.0 и 1.0
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -56,9 +58,9 @@ jobs:
           k8s/
 
   build:
-    # needs: все проверки — обязательное условие; if: собираем только main, не PR
+    # needs: все проверки — обязательное условие; if: собираем main и релизные теги, не PR
     needs: [test, validate-manifests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     # GITHUB_TOKEN по умолчанию не может писать в реестр — выдаём право явно.
     # Когда permissions указан, все остальные права сбрасываются в none,
@@ -70,6 +72,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Buildx нужен для кэша слоёв type=gha (обычный docker-драйвер его не умеет)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -77,16 +83,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # metadata-action генерирует теги по типу события:
+      # push в main   -> полный SHA + latest
+      # git-тег v1.2.3 -> v1.2.3 и 1.2 (+ SHA)
+      # Имя в GHCR обязано быть в нижнем регистре.
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/lovelybbot/k8s-labs/myapp
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: ./app
           push: true
-          # Имя в GHCR обязано быть в нижнем регистре.
-          # Тег по SHA коммита позволяет откатиться на любую версию.
-          tags: |
-            ghcr.io/lovelybbot/k8s-labs/myapp:latest
-            ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          # Кэш слоёв между запусками: пока requirements.txt не меняется,
+          # слой с pip install берётся из кэша GitHub Actions за секунды
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Скан образа на известные уязвимости (CVE) в базовом образе и
+      # python-пакетах. Мягкий режим: exit-code 0 — отчёт в логе, пайплайн
+      # не падает. Для строгого режима поменяйте exit-code на 1.
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/lovelybbot/k8s-labs/myapp:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "0"
 
   # CD-звено (GitOps): прописывает свежесобранный тег в манифест и коммитит
   # в main. Argo CD в кластере видит новый коммит и раскатывает его сам.
